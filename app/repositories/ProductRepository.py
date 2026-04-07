@@ -25,7 +25,7 @@ class ProductRepository:
         if price is not None:
             statement = statement.where(ProductCatalog.price == price)
         if code:
-            statement = statement.where(ProductCatalog.item.op("%")(code))
+            statement = statement.where(ProductCatalog.item == code)
         if description:
             statement = statement.where(ProductCatalog.product.op("%")(description))
 
@@ -50,8 +50,9 @@ class ProductRepository:
 
     def get_products_by_product_code(self, customer_name: str, address: str, code: str) -> List[ProductCatalog]:
         # Implementation mirrors logic: check customer, then fallback to address
-        results = self._base_search(ProductCatalog.customer, customer_name.strip(), code=code) if customer_name else []
-
+        self.db.execute(text(f"SET pg_trgm.similarity_threshold = {0.3};"))
+        results = self._base_search(ProductCatalog.customer, customer_name.strip(), code=code) if customer_name.strip() else []
+        # print(f"given customer: {customer_name}")
         if not results and address and address.strip():
             results = self._base_search(ProductCatalog.ship_to_address_1, address.strip(), code=code)
 

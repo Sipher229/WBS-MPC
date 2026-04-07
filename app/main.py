@@ -1,4 +1,4 @@
-from app.api.v1.endpoints import ocr, normaliser
+from app.api.v1.endpoints import ocr, normaliser, documents
 from fastapi import FastAPI, Depends, HTTPException
 from app.database import engine, Base
 from app.services.documentservice import DocumentService
@@ -7,6 +7,7 @@ app = FastAPI(title="Workflow Bridging System API")
 # Include the OCR routes
 app.include_router(ocr.router, prefix="/api/v1/ocr", tags=["OCR"])
 app.include_router(normaliser.router, prefix="/api/v1/normaliser", tags=["NORMALISER"])
+app.include_router(documents.router, prefix="/api/v1/documents", tags=["DOCUMENTS"])
 
 Base.metadata.create_all(bind=engine)
 

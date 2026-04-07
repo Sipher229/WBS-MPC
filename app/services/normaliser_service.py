@@ -23,17 +23,28 @@ class NormaliserService:
         self.prod_repo = prod_repo
         self.doc_repo = doc_repo
 
-    def _fuzzy_match(self, target_desc: str, products: List[ProductCatalog]) -> Optional[OrderDetailReview]:
+    def _fuzzy_match(self,
+                     target_desc: Optional[str] = None,
+                     products: List[ProductCatalog] = None,
+                     code: Optional[str] = None) -> Optional[OrderDetailReview]:
         detail_for_review: Optional[OrderDetailReview] = None
         # Map descriptions to the actual objects
         if not products:
             return None
         choices_map: Dict[str, ProductCatalog] = {}
-        for p in products:
-            # Ensure description is a string and not None
-            desc_value = str(p.product) if p.product else ""
-            if desc_value:
-                choices_map[desc_value] = p
+        if target_desc:
+            for p in products:
+                # Ensure description is a string and not None
+                desc_value = str(p.product) if p.product else ""
+                if desc_value:
+                    choices_map[desc_value] = p
+
+        if code:
+            for p in products:
+                # Ensure description is a string and not None
+                prod_code = str(p.product) if p.product else ""
+                if prod_code:
+                    choices_map[prod_code] = p
         if not choices_map:
             return None
 
@@ -42,15 +53,21 @@ class NormaliserService:
 
         choices_list: List[str] = list(choices_map.keys())
         # Find the best match
-        best_match = process.extractOne(target_desc, choices_list, scorer=fuzz.WRatio)  # type: ignore
+        best_match = None  # type: ignore
+
+        if target_desc:
+            best_match = process.extractOne(target_desc, choices_list, scorer=fuzz.WRatio)  # type: ignore
+
+        if code:
+            best_match = process.extractOne(code, choices_list, scorer=fuzz.WRatio)  # type: ignore
 
         if best_match:  # 70 is a standard confidence threshold
             strong_match_desc, score, _ = best_match
             match_product = choices_map[strong_match_desc]
             detail_for_review = OrderDetailReview(
                 item=match_product.item,
-                qty_ordered=match_product.qty_ord,
-                unit_price=match_product.price,
+                qty_ordered=0,
+                unit_price=0,
                 original_description=target_desc,
                 suggested_item_code=match_product.item,
                 match_score=round(score, 2),
@@ -111,13 +128,18 @@ class NormaliserService:
                         detail_for_review: Optional[OrderDetailReview] = None
                         if product_code and bool(self.PROD_CODE_PATTERN.fullmatch(product_code)):  # make sure the \
                             # provided code matches our pattern
+                            product_code = self._format_code(product_code)
+                            # print(formated_code)
                             results = self.prod_repo.get_products_by_product_code(
                                 customer_name, 
                                 address, 
                                 product_code
                             )  # should first isolate all products by customer.
-                            detail_for_review = self._fuzzy_match(description, results)
+                            detail_for_review = self._fuzzy_match(target_desc=description, products=results)
                             if detail_for_review:
+                                detail_for_review.unit_price = price
+                                detail_for_review.qty_ordered = item.quantity_ordered
+                                detail_for_review.item = product_code
                                 if not detail_for_review.needs_review:
                                     order_for_review.is_fully_normalized = True
 
@@ -130,6 +152,8 @@ class NormaliserService:
                             results = self.prod_repo.get_products_by_customer_and_price(customer_name, address, price)
                             detail_for_review = self._fuzzy_match(description, results)
                             if detail_for_review:
+                                detail_for_review.unit_price = price
+                                detail_for_review.qty_ordered = item.quantity_ordered
                                 if not detail_for_review.needs_review:
                                     order_for_review.is_fully_normalized = True
                                 if detail_for_review.needs_review:
@@ -142,6 +166,8 @@ class NormaliserService:
                             results = self.prod_repo.get_products_by_description(customer_name, address, description)
                             detail_for_review = self._fuzzy_match(description, results)
                             if detail_for_review:
+                                detail_for_review.unit_price = price
+                                detail_for_review.qty_ordered = item.quantity_ordered
                                 if not detail_for_review.needs_review:
                                     order_for_review.is_fully_normalized = True
                                 if detail_for_review.needs_review:
@@ -170,4 +196,19 @@ class NormaliserService:
 
         else:
             raise HTTPException(status_code=422, detail="cannot process document")
+
+    def _format_code(self, code):
+        # Pattern: 1 char, 2 digits, 3 digits, 3 chars, 4 digits
+        pattern = r'^([A-Z])(\d{2})(\d{3})([A-Z]{3})(\d{4})$'
+
+        # Check if it already matches the hyphenated format to avoid double-processing
+        if '-' in code:
+            return code
+
+        match = re.match(pattern, code)
+        if match:
+            # Join the captured groups with a hyphen
+            return "-".join(match.groups())
+
+        return code  # Return original if pattern doesn't match
 

@@ -1,7 +1,9 @@
+from datetime import date
+
 from fastapi import Depends
 from sqlalchemy.orm import Session
-from sqlalchemy import select, update
-from typing import Optional, Dict, Any
+from sqlalchemy import select, update, func, or_
+from typing import Optional, Dict, Any, List
 
 from app.database import get_db
 from app.models.PODataExtract import PODataExtract, PODataExtractItem
@@ -30,7 +32,8 @@ class DocumentRepository:
                 grand_total=payload.get("grand_total"),
                 customer_name=payload.get("customer_name"),
                 supplier_name=payload.get("supplier_name"),
-                buyer_email=payload.get("buyer_email")
+                buyer_email=payload.get("buyer_email"),
+                purchase_order_number=payload.get("purchase_order_number")
             )
 
             # Map line items if they exist
@@ -92,3 +95,15 @@ class DocumentRepository:
         result = self.db.execute(stmt)
         self.db.commit()
         return result.scalar_one()
+
+    def get_processed_orders_by_date(self, target_date: date) -> List[DocumentTracker]:
+        # Filters by status and casts the 'created_at' timestamp to a date for comparison
+        query = select(DocumentTracker).where(
+                or_(
+                    DocumentTracker.status == DocumentState.PROCESSED,
+                    DocumentTracker.status == DocumentState.NORMALIZED,
+                ))
+        # .where(func.date(DocumentTracker.updated_at) == target_date)
+
+        result = self.db.execute(query)
+        return list(result.scalars().all())

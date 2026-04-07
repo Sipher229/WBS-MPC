@@ -7,8 +7,8 @@ class OrderDetailReview(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     # Original Data
-    item: str  # product code
-    qty_ordered: float
+    item: Optional[str] = None  # product code
+    qty_ordered: Optional[float] = Field(0, description="The quantity requested for this item")
     unit_price: Optional[float] = None
     location: str = "1"
     uom: Optional[str] = None
