@@ -42,7 +42,7 @@ class NormaliserService:
         if code:
             for p in products:
                 # Ensure description is a string and not None
-                prod_code = str(p.product) if p.product else ""
+                prod_code = str(p.item) if p.item else ""
                 if prod_code:
                     choices_map[prod_code] = p
         if not choices_map:
@@ -140,6 +140,7 @@ class NormaliserService:
                                 detail_for_review.unit_price = price
                                 detail_for_review.qty_ordered = item.quantity_ordered
                                 detail_for_review.item = product_code
+                                detail_for_review.original_description = description
                                 if not detail_for_review.needs_review:
                                     order_for_review.is_fully_normalized = True
 
